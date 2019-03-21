@@ -1,0 +1,6 @@
+Student,id,java.lang.Integer,True,False
+Student,name,java.lang.String,False,False
+Student,gpa,java.lang.Double,False,True
+company,id,java.lang.Integer,True,False
+company,address,java.lang.String,False,False
+company,phone,java.lang.String,False,False
