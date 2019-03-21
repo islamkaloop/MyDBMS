@@ -91,6 +91,15 @@ public class DBApp {
 			}
 	}
 	
+	public void createBitmapIndex(String strTableName, String strColName){
+		try{
+			BitMap bitMap=new BitMap(strTableName, strColName);
+			tools.writeBitMap(bitMap, strTableName+"/"+strTableName+" "+strColName+".class");
+		}catch(Exception e){
+			JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
+		}
+	}
+	
 	public void insertIntoTable(String strTableName,Hashtable<String,Object> htblColNameValue){
 		try{
 		File fr =new File("metaData.csv");

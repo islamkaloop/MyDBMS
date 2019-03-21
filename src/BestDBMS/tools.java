@@ -81,6 +81,19 @@ public class tools {
 		os.writeObject(myTable);
 		os.close();
 	}
+	public static BitMap getBitMap(String path) throws FileNotFoundException, IOException, ClassNotFoundException{
+		File tableFile =new File(path);
+		ObjectInputStream is =new ObjectInputStream(new FileInputStream(tableFile));
+		BitMap BitMap=(BitMap) is.readObject();
+		is.close();
+		return BitMap;
+	}
+	public static void writeBitMap(BitMap myBitMap,String path) throws FileNotFoundException, IOException{
+		File tableFile2 =new File(path);
+		ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(tableFile2));
+		os.writeObject(myBitMap);
+		os.close();
+	}
 	
 	public static ArrayList<String[]> getMetaData() throws IOException{
 		ArrayList<String[]> output =new ArrayList<String[]>();
