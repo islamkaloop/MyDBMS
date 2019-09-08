@@ -1,6 +1,7 @@
 # MyDBMS
 - In this project, we use Java to build a small database engine with support for
 a Bitmap index.
+
 -The required functionalities are
 1) creating tables.
 2) inserting tuples.
