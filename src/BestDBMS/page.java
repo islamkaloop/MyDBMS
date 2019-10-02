@@ -3,7 +3,6 @@ package BestDBMS;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.sql.Date;
 import java.util.Hashtable;
 import java.util.Set;
 import java.util.Vector;
@@ -17,7 +16,7 @@ public class page implements Serializable{
 	private String strClusteringKeyColumn;
 	Vector<Hashtable<String,Object>> tuples =new Vector<Hashtable<String,Object>>();
 	
-	public page(String tableName,int pageIndex,String strClusteringKeyColumn) throws FileNotFoundException, IOException{
+	public page(String tableName,String strClusteringKeyColumn) throws FileNotFoundException, IOException{
 		this.strClusteringKeyColumn=strClusteringKeyColumn;
 	    tuples =new Vector<Hashtable<String,Object>>();
 	}
@@ -29,7 +28,7 @@ public class page implements Serializable{
 				boolean insearted =false;
 				int size =tuples.size();
 				for (int first =size-1;first>=0;first--) {
-					int i=combareTo(tuples.get(first).get(strClusteringKeyColumn), tuple.get(strClusteringKeyColumn));
+					int i=tools.combareTo(tuples.get(first).get(strClusteringKeyColumn), tuple.get(strClusteringKeyColumn));
 					if(i<0){
 						tuples.add(first+1, tuple);
 						insearted=true;
@@ -69,6 +68,16 @@ public class page implements Serializable{
 		}
 	}
 	
+	public void removByID(String ColumeName){
+		for (int first =0;first<tuples.size();) {
+			if(ColumeName.equals(tuples.get(first).get(ColumeName))){
+				tuples.remove(first);
+			}else{
+				first++;
+			}
+		}
+	}
+	
 	public  boolean updateRow(String strKey,Hashtable<String,Object> tuple) throws ClassNotFoundException, IOException, DBAppException{
 		boolean isUpdated=false;
 		for (int first =0;first<tuples.size();first++) {
@@ -92,24 +101,5 @@ public class page implements Serializable{
 	}
 	public Hashtable<String,Object> getlasttuple(){
 		return tuples.lastElement();
-	}
-	public static int combareTo(Object first,Object second){
-		int i=0;
-		if (first instanceof String) {
-			i=((String) first).compareTo((String) second);
-		}
-		else if (first instanceof Integer) {
-			i=((Integer) first).compareTo((Integer) second);
-		}
-		else if (first instanceof Double) {
-			i=((Double) first).compareTo((Double)second);
-		}
-		else if (first instanceof Boolean) {
-			i=((Boolean) first).compareTo((Boolean) second);
-		}
-		else if (first instanceof Date) {
-			i=((Date) first).compareTo((Date)second);
-		}
-		return i;
 	}
 }

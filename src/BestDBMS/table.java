@@ -1,13 +1,10 @@
 package BestDBMS;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Hashtable;
 
 import javax.swing.JFrame;
@@ -21,6 +18,7 @@ public class table implements Serializable{
 	private String strTableName;
 	private String strClusteringKeyColumn;
 	private int lastIndex;
+	public ArrayList<int[]> pageContent =new ArrayList<int[]>();
 
 	public table(String strTableName, String strClusteringKeyColumn) throws DBAppException{
 		this.strTableName=strTableName;
@@ -29,72 +27,49 @@ public class table implements Serializable{
 	}
 	
 	public void insertIntoTable(Hashtable<String,Object> htblColNameValue) throws DBAppException, FileNotFoundException, IOException, ClassNotFoundException{
-		File file = new File(strTableName);
-		File[] directories = file.listFiles();
-		if(directories.length==1){
-			lastIndex=0;
-			File tableFile =new File(strTableName+"/"+strTableName+" 0.class");
-			page page =new page(strTableName,lastIndex,strClusteringKeyColumn);
-			page.addRow(htblColNameValue);
-			ObjectOutputStream os1 =new ObjectOutputStream(new FileOutputStream(tableFile));
-			os1.writeObject(page);
-			os1.close();
-		}else{
-			boolean insearted=false;
-			for(int i=0;i < lastIndex+1;i++){
-				File tableFile =new File(strTableName+"/"+strTableName+" "+i+".class");
-				if(tableFile.exists()){
-					ObjectInputStream is =new ObjectInputStream(new FileInputStream(tableFile));
-					page page=(BestDBMS.page) is.readObject();
-					is.close();
-					int k = BestDBMS.page.combareTo(page.getlasttuple().get(strClusteringKeyColumn), htblColNameValue.get(strClusteringKeyColumn));
-					if(k>0){
-						Hashtable<String,Object> tuple=page.addRow(htblColNameValue);
-						insearted=true;
-						ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(tableFile));
-						os.writeObject(page);
-						os.close();
-						if(tuple != null){
-							insertIntoTable(tuple);
-						}
-					}else if(k==0){
-					throw new DBAppException("There are entry with this primary key :"+ htblColNameValue.get(strClusteringKeyColumn));
-					}
-				}
-			}
-			if(!insearted){
-				File tableFile3 =new File(strTableName+"/"+strTableName+" "+lastIndex+".class");
-				if(tableFile3.exists()){
-					ObjectInputStream is =new ObjectInputStream(new FileInputStream(tableFile3));
-					page page=(BestDBMS.page) is.readObject();
-					is.close();
+		boolean insearted=false;
+		for(int i=0;i < lastIndex+1;i++){
+			File tableFile =new File(strTableName+"/"+strTableName+" "+i+".class");
+			if(tableFile.exists()){
+				page page=tools.getPage(strTableName+"/"+strTableName+" "+i+".class");
+				int k = tools.combareTo(page.getlasttuple().get(strClusteringKeyColumn), htblColNameValue.get(strClusteringKeyColumn));
+				if(k>0){
 					Hashtable<String,Object> tuple=page.addRow(htblColNameValue);
-					ObjectOutputStream os1 =new ObjectOutputStream(new FileOutputStream(tableFile3));
-					os1.writeObject(page);
-					os1.close();
+					pageContent = tools.setPageSize(lastIndex, page.getSize(), pageContent);
+					insearted=true;
+					tools.writePage(page, strTableName+"/"+strTableName+" "+i+".class");
 					if(tuple != null){
-						lastIndex=lastIndex+1;
-						File tableFile2 =new File(strTableName+"/"+strTableName+" "+lastIndex+".class");
-						page page1 =new page(strTableName,lastIndex,strClusteringKeyColumn);
-						page1.addRow(tuple);
-						ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(tableFile2));
-						os.writeObject(page1);
-						os.close();
-				}
-				}else{
-						lastIndex=lastIndex+1;
-						File tableFile2 =new File(strTableName+"/"+strTableName+" "+lastIndex+".class");
-						page page1 =new page(strTableName,lastIndex,strClusteringKeyColumn);
-						page1.addRow(htblColNameValue);
-						ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(tableFile2));
-						os.writeObject(page1);
-						os.close();
+						insertIntoTable(tuple);
+					}
+					break;
+				}else if(k==0){
+					throw new DBAppException("There are entry with this primary key :"+ htblColNameValue.get(strClusteringKeyColumn));
 				}
 			}
-		
-	}
-		JOptionPane.showMessageDialog(new JFrame(),"your entery has been succsesfuly insearted");
-	}
+		}
+		if(!insearted){
+			File tableFile3 =new File(strTableName+"/"+strTableName+" "+lastIndex+".class");
+			if(tableFile3.exists()){
+				page page=tools.getPage(strTableName+"/"+strTableName+" "+lastIndex+".class");
+				Hashtable<String,Object> tuple=page.addRow(htblColNameValue);
+				pageContent = tools.setPageSize(lastIndex, page.getSize(), pageContent);
+				tools.writePage(page, strTableName+"/"+strTableName+" "+lastIndex+".class");
+				if(tuple != null){
+					lastIndex=lastIndex+1;
+					page page1 =new page(strTableName,strClusteringKeyColumn);
+					page1.addRow(tuple);
+					pageContent = tools.setPageSize(lastIndex, page1.getSize(), pageContent);
+					tools.writePage(page, strTableName+"/"+strTableName+" "+lastIndex+".class");
+				}
+			}else{
+					page page =new page(strTableName,strClusteringKeyColumn);
+					page.addRow(htblColNameValue);
+					pageContent = tools.setPageSize(lastIndex, page.getSize(), pageContent);
+					tools.writePage(page, strTableName+"/"+strTableName+" "+lastIndex+".class");
+			}
+		}	
+	JOptionPane.showMessageDialog(new JFrame(),"your entery has been succsesfuly insearted");
+}
 	
 	public int getLastIndex() {
 		return lastIndex;
@@ -105,19 +80,13 @@ public class table implements Serializable{
 		for(int i=0;i < lastIndex+1;i++){
 			File tableFile =new File(strTableName+"/"+strTableName+" "+i+".class");
 			if(tableFile.exists()){
-				ObjectInputStream is =new ObjectInputStream(new FileInputStream(tableFile));
-				page page=(BestDBMS.page) is.readObject();
-				is.close();
+				page page=tools.getPage(strTableName+"/"+strTableName+" "+i+".class");
 				if(page.updateRow(strKey, htblColNameValue)){
+					pageContent = tools.setPageSize(lastIndex, page.getSize(), pageContent);
 					isUpdated=true;
-					ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(new File(strTableName+"/"+strTableName+" "+i+".class")));
-					os.writeObject(page);
-					os.close();
+					tools.writePage(page, strTableName+"/"+strTableName+" "+i+".class");
 					break;
 				}
-				ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(new File(strTableName+"/"+strTableName+" "+i+".class")));
-				os.writeObject(page);
-				os.close();
 			}
 		}
 		if(!isUpdated){
@@ -130,18 +99,13 @@ public class table implements Serializable{
 		for(int i=0;i < lastIndex+1;i++){
 			File tableFile =new File(strTableName+"/"+strTableName+" "+i+".class");
 			if(tableFile.exists()){
-				FileInputStream fo=new FileInputStream(tableFile);
-				ObjectInputStream is =new ObjectInputStream(fo);
-				page page=(BestDBMS.page) is.readObject();
-				is.close();
-				fo.close();
+				page page=tools.getPage(strTableName+"/"+strTableName+" "+i+".class");
 				page.removeRow(htblColNameValue);
+				pageContent = tools.setPageSize(lastIndex, page.getSize(), pageContent);
 				if(page.getSize()==0){
 					tableFile.delete();
 				}else{
-					ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(tableFile));
-					os.writeObject(page);
-					os.close();
+					tools.writePage(page, strTableName+"/"+strTableName+" "+i+".class");
 				}
 			}
 		}

@@ -1,18 +1,14 @@
 package BestDBMS;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.Stack;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -41,51 +37,33 @@ public class DBApp {
 	
 	public void createTable(String strTableName,String strClusteringKeyColumn, Hashtable<String,String> htblColNameType ) {
 			try{	
-			Set<String> ht = htblColNameType.keySet();
-			Object[] s = ht.toArray();
-			for(int i =0;i<s.length;i++){
-				if(!supportedTypes.contains(htblColNameType.get(s[i]).toLowerCase())){
-					throw new DBAppException(htblColNameType.get(s[i])+"is not supported type");
-				}
-			}
-			File fr =new File("metaData.csv");
-			Scanner sc =new Scanner(fr);
-			Stack<String[]> myMeta =new Stack<String[]>();
+			tools.checkSupported(htblColNameType, supportedTypes);
 			boolean found =false;
-			while(sc.hasNextLine()){
-				String[] attri =sc.nextLine().split(",");
+			ArrayList<String []> metaData =tools.getMetaData();
+			for(int i=0;i<metaData.size();i++){
+				String[] attri =metaData.get(i);
 				if(attri[0].equals(strTableName)){
 					found=true;
 				}
-				myMeta.add(attri);
 			}
-			sc.close();
 			if(found){
 				throw new DBAppException(strTableName+" is already exist");
 			}
-			FileWriter fw = new FileWriter("metaData.csv");
-			String sr =""; 
-			while(!myMeta.isEmpty()){
-				String[] atrr =myMeta.pop();
-				sr=atrr[0]+","+atrr[1]+","+atrr[2]+","+atrr[3]+","+atrr[4]+"\n"+sr;
-			}
-			fw.write(sr);
-			for(int i =s.length-1;i>=0;i--){
-				if(s[i].equals(strClusteringKeyColumn)){
-					fw.write(strTableName+","+s[i]+","+htblColNameType.get(s[i])+",True,False\n");
+			Set<String> entrySey = htblColNameType.keySet();
+			Object[] entryArray = entrySey.toArray();
+			for(int i =entryArray.length-1;i>=0;i--){
+				if(entryArray[i].equals(strClusteringKeyColumn)){
+					metaData.add(new String[]{strTableName,entryArray[i]+"",htblColNameType.get(entryArray[i]),"True","False"});
 				}
 				else{
-					fw.write(strTableName+","+s[i]+","+htblColNameType.get(s[i])+",False,False\n");	
+					metaData.add(new String[]{strTableName,entryArray[i]+"",htblColNameType.get(entryArray[i]),"False","False"});
 				}
 			}
-			fw.close();
+			tools.setMetaData(metaData);
 			File file =new File(strTableName);
 			file.mkdir();
-			File tableFile =new File(strTableName+"/"+strTableName+".class");
-			ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(tableFile));
 			table table =new table(strTableName, strClusteringKeyColumn);
-			os.writeObject(table);
-			os.close();
+			tools.writeTable(table, strTableName+"/"+strTableName+".class");
 			}catch(Exception e){
 				JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
 			}
@@ -102,35 +80,29 @@ public class DBApp {
 	
 	public void insertIntoTable(String strTableName,Hashtable<String,Object> htblColNameValue){
 		try{
-		File fr =new File("metaData.csv");
-		Scanner sc =new Scanner(fr);
-		boolean found =false;
-		while(sc.hasNextLine()){
-			String[] attri =sc.nextLine().split(",");
-			if(attri[0].equals(strTableName)){
-				found=true;
-				Object o =htblColNameValue.get(attri[1]);
-				if(o == null){sc.close(); throw new DBAppException("there messing Attribute");}
-				if(!Class.forName(attri[2]).isInstance(o)){
-					sc.close();
-					throw new DBAppException(attri[1]+" should to be of type "+ attri[2]+" not "+o.getClass().getName());
+			boolean found =false;
+			ArrayList<String []> metaData =tools.getMetaData();
+			for(int i=0;i<metaData.size();i++){
+				String[] attri =metaData.get(i);
+				if(attri[0].equals(strTableName)){
+					found=true;
+					Object o =htblColNameValue.get(attri[1]);
+					if(o == null){throw new DBAppException("there messing Attribute");}
+					if(!Class.forName(attri[2]).isInstance(o)){
+						throw new DBAppException(attri[1]+" should to be of type "+ attri[2]+" not "+o.getClass().getName());
+					}
 				}
 			}
-		}		
-		sc.close();
-		SimpleDateFormat sdf =new SimpleDateFormat("yyyy/MM/dd hh:mm:ss");
-		htblColNameValue.put("TouchDate",""+sdf.format(new java.util.Date()));
-		if(found){
-			ObjectInputStream is =new ObjectInputStream(new FileInputStream(strTableName+"/"+strTableName+".class"));
-			table table =(BestDBMS.table) is.readObject();
-			is.close();
-			table.insertIntoTable(htblColNameValue);
-			ObjectOutputStream os =new ObjectOutputStream(new FileOutputStream(strTableName+"/"+strTableName+".class"));
-			os.writeObject(table);
-			os.close();
-		}else{
-			throw new DBAppException(strTableName+" is not found");
-		}
+			SimpleDateFormat sdf =new SimpleDateFormat("yyyy/MM/dd hh:mm:ss");
+			htblColNameValue.put("TouchDate",""+sdf.format(new java.util.Date()));
+			if(found){
+				table table =tools.getTable(strTableName+"/"+strTableName+".class");
+				table.insertIntoTable(htblColNameValue);
+				tools.writeTable(table, strTableName+"/"+strTableName+".class");
+				tools.updateAllBitMaps(strTableName);
+			}else{
+				throw new DBAppException(strTableName+" is not found");
+			}
 		}catch(Exception e){
 			JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
 		}
@@ -138,31 +110,28 @@ public class DBApp {
 	
 	public void updateTable(String strTableName,String strKey,Hashtable<String,Object> htblColNameValue ){
 		try{
-		File fr =new File("metaData.csv");
-		Scanner sc =new Scanner(fr);
-		boolean found =false;
-		while(sc.hasNextLine()){
-			String[] attri =sc.nextLine().split(",");
-			if(attri[0].equals(strTableName)){
-				found =true;
-				Object o =htblColNameValue.get(attri[1]);
-				if(o != null && !Class.forName(attri[2]).isInstance(o)){
-					sc.close();
-					throw new DBAppException(o.getClass().getName()+" should to be of type "+ attri[2]);
+			boolean found =false;
+			ArrayList<String []> metaData =tools.getMetaData();
+			for(int i=0;i<metaData.size();i++){
+				String[] attri =metaData.get(i);
+				if(attri[0].equals(strTableName)){
+					found =true;
+					Object o =htblColNameValue.get(attri[1]);
+					if(o != null && !Class.forName(attri[2]).isInstance(o)){
+						throw new DBAppException(o.getClass().getName()+" should to be of type "+ attri[2]);
+					}
 				}
 			}
-		}
-		sc.close();
-		SimpleDateFormat sdf =new SimpleDateFormat("yyyy/MM/dd hh:mm:ss");
-		htblColNameValue.put("TouchDate",""+sdf.format(new java.util.Date()));
-		if(found){
-			ObjectInputStream is =new ObjectInputStream(new FileInputStream(strTableName+"/"+strTableName+".class"));
-			table table =(BestDBMS.table) is.readObject();
-			is.close();
-			table.updateTable(strKey, htblColNameValue);
-		}else{
-			throw new DBAppException(strTableName+" is not found");
-		}
+			SimpleDateFormat sdf =new SimpleDateFormat("yyyy/MM/dd hh:mm:ss");
+			htblColNameValue.put("TouchDate",""+sdf.format(new java.util.Date()));
+			if(found){
+				table table =tools.getTable(strTableName+"/"+strTableName+".class");
+				table.updateTable(strKey, htblColNameValue);
+				tools.writeTable(table, strTableName+"/"+strTableName+".class");
+				tools.updateAllBitMaps(strTableName);
+			}else{
+				throw new DBAppException(strTableName+" is not found");
+			}
 		}catch(Exception e){
 			JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
 		}
@@ -170,32 +139,185 @@ public class DBApp {
 	
 	public void deleteFromTable(String strTableName,Hashtable<String,Object> htblColNameValue){
 		try{
-		File fr =new File("metaData.csv");
-		Scanner sc =new Scanner(fr);
-		boolean found =false;
-		while(sc.hasNextLine()){
-			String[] attri =sc.nextLine().split(",");
-			if(attri[0].equals(strTableName)){
-				found=true;
-				Object o =htblColNameValue.get(attri[1]);
-				if(o != null && !Class.forName(attri[2]).isInstance(o)){
-					sc.close();
-					throw new DBAppException(o.getClass().getName()+" should to be of type "+ attri[2]);
+			boolean found =false;
+			ArrayList<String []> metaData =tools.getMetaData();
+			for(int i=0;i<metaData.size();i++){
+				String[] attri =metaData.get(i);
+				if(attri[0].equals(strTableName)){
+					found=true;
+					Object o =htblColNameValue.get(attri[1]);
+					if(o != null && !Class.forName(attri[2]).isInstance(o)){
+						throw new DBAppException(o.getClass().getName()+" should to be of type "+ attri[2]);
+					}
 				}
 			}
-		}
-		sc.close();
-		if(found){
-			ObjectInputStream is =new ObjectInputStream(new FileInputStream(strTableName+"/"+strTableName+".class"));
-			table table =(BestDBMS.table) is.readObject();
-			is.close();
-			table.deleteFromTable(htblColNameValue);
-		}else{
-			throw new DBAppException(strTableName+" is not found");
-		}
+			if(found){
+				table table =tools.getTable(strTableName+"/"+strTableName+".class");
+				table.deleteFromTable(htblColNameValue);
+				tools.writeTable(table, strTableName+"/"+strTableName+".class");
+				tools.updateAllBitMaps(strTableName);
+			}else{
+				throw new DBAppException(strTableName+" is not found");
+			}
 		}catch(Exception e){
 			JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
 		}
 	}
+	@SuppressWarnings("rawtypes")
+	public Iterator selectFromTable(SQLTerm[] arrSQLTerms,String[] strarrOperators){
+			try{
+				Selector selector = new Selector();
+				ArrayList<String>  bitTerms =new ArrayList<>();
+				String TableName=arrSQLTerms[0]._strTableName;
+				ArrayList<String []> metaDat =tools.getMetaData();
+				for(int c = 0; c< arrSQLTerms.length; c++) {
+					boolean found =false;
+					for(int i = 0; i< metaDat.size(); i++) {
+						String[] attri =metaDat.get(i);
+						if(attri[0].equals(arrSQLTerms[c]._strTableName)){
+							//checking for index && Getting bitValues
+							if(attri[1].equals(arrSQLTerms[c]._strColumnName) && attri[4].equals("True")){
+								found=true;
+								String tableName = arrSQLTerms[c]._strTableName;
+								String ColumnName = arrSQLTerms[c]._strColumnName;
+								Object objectValue = arrSQLTerms[c]._objValue;
+								String operator = arrSQLTerms[c]._strOperator;
+								BitMap bitMap = tools.getBitMap(tableName+"/"+tableName+" "+ColumnName+".class");
+								bitTerms.add(c, bitMap.getvalueOf(objectValue , operator));
+								break;
+							}
+						}
+					}
+					if(!found){
+						bitTerms.add(c,"");
+					}
+				}
+				ArrayList<SQLTerm> ArrSQLTerms = new ArrayList<>();
+				ArrayList<String> StrarrOperators = new ArrayList<>();
+				for(int i=0;i<arrSQLTerms.length;i++){
+					ArrSQLTerms.add(arrSQLTerms[i]);
+					StrarrOperators.add(strarrOperators[i]);
+				}
+				//handling precedence
+				for(int i=0;i<StrarrOperators.size();){
+					ArrayList<String> valuesToCombine = new ArrayList<>();
+					if(i+1<ArrSQLTerms.size() ){
+						if(StrarrOperators.get(i).equals("AND")){
+								if(!bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+									valuesToCombine.add(bitTerms.get(i));
+									valuesToCombine.add(bitTerms.get(i+1));
+									bitTerms.add(i,tools.combineValuesWithAnd(valuesToCombine));
+								    bitTerms.remove(i+1);
+									ArrSQLTerms.add(null);
+									ArrSQLTerms.remove(i+1);
+								    StrarrOperators.remove(i);
+								}else if(!bitTerms.get(i).equals("")&&bitTerms.get(i+1).equals("")){
+									bitTerms.add(i,selector.compineWithAndOneIndex((String)bitTerms.get(i+1), (SQLTerm)ArrSQLTerms.get(i)));
+									bitTerms.remove(i+1);
+									ArrSQLTerms.add(null);
+									ArrSQLTerms.remove(i+1);
+									StrarrOperators.remove(i);
+								}else if(bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+									bitTerms.add(i,selector.compineWithAndOneIndex((String)bitTerms.get(i), (SQLTerm)ArrSQLTerms.get(i+1)));
+									bitTerms.remove(i+1);
+									ArrSQLTerms.add(null);
+									ArrSQLTerms.remove(i+1);
+									StrarrOperators.remove(i);
+								}else if(!bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+									bitTerms.add(i,selector.compineWithAndNoIndex(((SQLTerm)ArrSQLTerms.get(i)), (SQLTerm)ArrSQLTerms.get(i+1)));
+									bitTerms.remove(i+1);
+									ArrSQLTerms.add(null);
+									ArrSQLTerms.remove(i+1);
+									StrarrOperators.remove(i);
+								}
+							}else{
+								i++;
+							}
+					}
+				}
+				for(int i=0;i<StrarrOperators.size();){
+					ArrayList<String> valuesToCombine = new ArrayList<>();
+					if(i+1<ArrSQLTerms.size() ){
+						if(StrarrOperators.get(i).equals("OR")){
+							if(!bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+								valuesToCombine.add(bitTerms.get(i));
+								valuesToCombine.add(bitTerms.get(i+1));
+								bitTerms.add(i,tools.combineValuesWithOr(valuesToCombine));
+							    bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+							    StrarrOperators.remove(i);
+							}else if(!bitTerms.get(i).equals("")&&bitTerms.get(i+1).equals("")){
+								bitTerms.add(i,selector.compineWithOrOneIndex((String)bitTerms.get(i+1), (SQLTerm)ArrSQLTerms.get(i)));
+								bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+								StrarrOperators.remove(i);
+							}else if(bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+								bitTerms.add(i,selector.compineWithOrOneIndex((String)bitTerms.get(i), (SQLTerm)ArrSQLTerms.get(i+1)));
+								bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+								StrarrOperators.remove(i);
+							}else if(!bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+								bitTerms.add(i,selector.compineWithOrNoIndex(((SQLTerm)ArrSQLTerms.get(i)), (SQLTerm)ArrSQLTerms.get(i+1)));
+								bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+								StrarrOperators.remove(i);
+							}
+					}else{
+						i++;
+					}
+				}
+				}
+				for(int i=0;i<StrarrOperators.size();){
+					ArrayList<String> valuesToCombine = new ArrayList<>();
+					if(i+1<ArrSQLTerms.size() ){
+						if(StrarrOperators.get(i).equals("XOR")){
+							if(!bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+								valuesToCombine.add(bitTerms.get(i));
+								valuesToCombine.add(bitTerms.get(i+1));
+								bitTerms.add(i,tools.combineValuesWithXor(valuesToCombine));
+							    bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+							    StrarrOperators.remove(i);
+							}else if(!bitTerms.get(i).equals("")&&bitTerms.get(i+1).equals("")){
+								bitTerms.add(i,selector.compineWithXorOneIndex((String)bitTerms.get(i+1), (SQLTerm)ArrSQLTerms.get(i)));
+								bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+								StrarrOperators.remove(i);
+							}else if(bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+								bitTerms.add(i,selector.compineWithXorOneIndex((String)bitTerms.get(i), (SQLTerm)ArrSQLTerms.get(i+1)));
+								bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+								StrarrOperators.remove(i);
+							}else if(!bitTerms.get(i).equals("")&&!bitTerms.get(i+1).equals("")){
+								bitTerms.add(i,selector.compineWithXorNoIndex(((SQLTerm)ArrSQLTerms.get(i)), (SQLTerm)ArrSQLTerms.get(i+1)));
+								bitTerms.remove(i+1);
+								ArrSQLTerms.add(null);
+								ArrSQLTerms.remove(i+1);
+								StrarrOperators.remove(i);
+							}
+						}
+						else{
+							i++;
+						}
+					}
+				}
+				if(bitTerms.size()==1){
+					return selector.FillIter(TableName, bitTerms.get(0));
+				}else{
+					return null;
+				}
+			}catch (Exception e) {
+				JOptionPane.showMessageDialog(new JFrame(), e.getMessage());
+			}
+			return null;
+		}
+	
 	
 }

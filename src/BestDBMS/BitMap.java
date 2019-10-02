@@ -26,22 +26,13 @@ public class BitMap implements Serializable{
 		JOptionPane.showMessageDialog(new JFrame(),"Index on Column "+strColumeName+" in "+strTableName+" has been created");
 	}
 	
-	public static void main(String [] a) throws DBAppException, ClassNotFoundException, IOException{
-		BitMap bm =new BitMap("Student","gpa");
-		bm.createBitMap();
-
-	}
-	
 	public void createBitMap() throws DBAppException, ClassNotFoundException, IOException{
 		ArrayList<String []> metaData =tools.getMetaData();
 		boolean found =false;
 		for(int i=0;i<metaData.size();i++){
 			String[] attri =metaData.get(i);
-			if(attri[0].equals(strTableName)||attri[1].equals(strColumeName)){
+			if(attri[0].equals(strTableName)&&attri[1].equals(strColumeName)){
 				found=true;
-				if(attri[1].equals(strColumeName) && attri[4].equals("True")){
-					this.removeBitMap();
-				}
 			}
 		}
 		if(!found){
@@ -78,23 +69,87 @@ public class BitMap implements Serializable{
 		tools.setMetaData(metaData);
 	}
 	
-	private void removeBitMap() {
+	public void updateBitMap() throws DBAppException, ClassNotFoundException, IOException{
+		ArrayList<String []> metaData =tools.getMetaData();
+		boolean found =false;
+		for(int i=0;i<metaData.size();i++){
+			String[] attri =metaData.get(i);
+			if(attri[0].equals(strTableName)&&attri[1].equals(strColumeName)){
+				found=true;
+			}
+		}
+		if(!found){
+			throw new DBAppException("We Can not found table name or the colume you want");
+		}
+		ArrayList<Object> allValues = getValues(strTableName,strColumeName);
+		ArrayList<Object> uniqeValues=new ArrayList<Object>();
+		for(int i = 0;i<allValues.size();i++){
+			if(!uniqeValues.contains(allValues.get(i))){
+				uniqeValues.add(allValues.get(i));
+			}
+		}		
+		for(int i = 0;i<uniqeValues.size();i++){
+			String index ="";
+			for(int c =0 ;c<allValues.size();c++){
+				if(uniqeValues.get(i).equals(allValues.get(c))){
+					index+="1";
+				}else{
+					index+="0";
+				}
+			}
+			Hashtable<String,Object> htblindex = new Hashtable<String,Object>();
+			htblindex.put("Attribute",uniqeValues.get(i));
+			htblindex.put("Value", tools.runlengthencoding(index));
+			updateIntoBitMap(htblindex);
+		}
+	}
+	
+	public void removeBitMap() {
+		File tableFile =new File(strTableName+"/"+strTableName+" "+strColumeName+".class");
+		if(tableFile.exists()){
+			tableFile.delete();
+		}
 		for(int i=0;i < lastIndex+1;i++){
-			File tableFile =new File(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
-			if(tableFile.exists()){
-				tableFile.delete();
+			File tableFile1 =new File(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
+			if(tableFile1.exists()){
+				tableFile1.delete();
 			}
 		}
 		lastIndex=0;
 	}
 
+	public void updateIntoBitMap(Hashtable<String,Object> indexRow) throws FileNotFoundException, ClassNotFoundException, IOException, DBAppException{
+		for(int i=0;i < lastIndex+1;i++){
+			File tableFile =new File(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
+			if(tableFile.exists()){
+				page page=tools.getPage(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
+				if(tools.checkZero((String) indexRow.get("Value"))){
+					page.removByID((String) indexRow.get("Attribute"));
+				}else{
+					int k = tools.combareTo(page.getlasttuple().get("Attribute"), indexRow.get("Attribute"));
+					if(k>0){
+						if(!page.updateRow((String)indexRow.get("Attribute"),indexRow)){
+							Hashtable<String,Object> tuple=page.addRow(indexRow);
+							if(tuple != null){
+								insertIntoBitMap(tuple);
+							}
+						}
+					}else if(k==0){
+						page.updateRow((String)indexRow.get("Attribute"),indexRow);
+					}
+					tools.writePage(page, strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
+					break;
+				}
+			}
+		}
+	}
 	public void insertIntoBitMap(Hashtable<String,Object> indexRow) throws FileNotFoundException, ClassNotFoundException, IOException, DBAppException{
 			boolean insearted=false;
 			for(int i=0;i < lastIndex+1;i++){
 				File tableFile =new File(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
 				if(tableFile.exists()){
 					page page=tools.getPage(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
-					int k = BestDBMS.page.combareTo(page.getlasttuple().get("Attribute"), indexRow.get("Attribute"));
+					int k = tools.combareTo(page.getlasttuple().get("Attribute"), indexRow.get("Attribute"));
 					if(k>0){
 						Hashtable<String,Object> tuple=page.addRow(indexRow);
 						insearted=true;
@@ -115,12 +170,12 @@ public class BitMap implements Serializable{
 					tools.writePage(page, strTableName+"/"+strTableName+" "+strColumeName+" "+lastIndex+".class");;
 					if(tuple != null){
 						lastIndex=lastIndex+1;
-						page page1 =new page(strTableName,lastIndex,"Attribute");
+						page page1 =new page(strTableName,"Attribute");
 						page1.addRow(tuple);
 						tools.writePage(page1, strTableName+"/"+strTableName+" "+strColumeName+" "+lastIndex+".class");
 				}
 				}else{
-						page page1 =new page(strTableName,lastIndex,"Attribute");
+						page page1 =new page(strTableName,"Attribute");
 						page1.addRow(indexRow);
 						tools.writePage(page1, strTableName+"/"+strTableName+" "+strColumeName+" "+lastIndex+".class");
 				}
@@ -134,8 +189,9 @@ public class BitMap implements Serializable{
 			File tableFile =new File(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
 			if(tableFile.exists()){
 				page page=tools.getPage(strTableName+"/"+strTableName+" "+strColumeName+" "+i+".class");
+				
 				for(int c=0;c<page.getSize();c++){
-					int k = BestDBMS.page.combareTo(page.tuples.get(c).get("Attribute"),value);
+					int k = tools.combareTo(page.tuples.get(c).get("Attribute"),value);
 					switch (Operation) {
 					case ">":
 						if(k<0){
@@ -174,6 +230,9 @@ public class BitMap implements Serializable{
 				}
 			}
 		}
+		if(myrelatedValue.isEmpty()){
+			return "";
+		}
 		output=tools.combineValuesWithOr(myrelatedValue);
 		return output;
 	}
@@ -194,4 +253,5 @@ public class BitMap implements Serializable{
 		}
 		return output;
 	}
+	
 }
